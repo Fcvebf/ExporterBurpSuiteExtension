@@ -15,11 +15,19 @@ import java.util.List;
 
 public class ExporterController
 {
-    private final IssuesModel issuesModel;
+    public final IssuesModel issuesModel;
     private final ExportModel exportModel;
-    private final ExportOptionsPanel expoptionsPanel;
+    public final ExportOptionsPanel expoptionsPanel;
     private final DebugPanel dbgPanel;
     private MontoyaApi montoyaApi;
+    public DocxOptions docxOptions=null;
+    public PwndocOptions pwndocOptions=null;
+    public CSVOptions csvOptions=null;
+    public JSONOptions jsonOptions=null;
+    public XMLOptions xmlOptions=null;
+    public MarkdownOptions markddownOptions=null;
+    public List<Finding> items;
+    public Config.exportOptionsEnum selectedOption;
 
     public ExporterController(IssuesModel issuesModel, ExportModel exportModel, ExportOptionsPanel expoptionsPanel, DebugPanel dbgPanel, MontoyaApi montoyaApi)
     {
@@ -53,7 +61,8 @@ public class ExporterController
         issuesModel.addIssues(auditIssues);
 
         setIssuesPopulated(!auditIssues.isEmpty());
-        
+        //Events.publish(AddIssuesEventToModel);
+        Events.publish(new Events.AddIssuesEventToModel(auditIssues));
     }
 
     private void removeSelectedIssues()
@@ -83,14 +92,14 @@ public class ExporterController
 
     public void handleExportClicked()
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.clearArea());
+        //SwingUtilities.invokeLater(() -> dbgPanel.clearArea());
         List<Finding> items= issuesModel.getFindings();
         Events.publish(new Events.ExportFindingsClick(items));
     }
 
     public void handleExportClicked(ActionEvent e)
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.clearArea());
+        //SwingUtilities.invokeLater(() -> dbgPanel.clearArea());
         List<Finding> items= issuesModel.getFindings();
         Events.publish(new Events.ExportFindingsClick(items));
     }
@@ -101,18 +110,12 @@ public class ExporterController
         this.issuesModel.removeAllIssues();
     }
 
-
+/*
     private void exportIssues()
     {
         List<Finding> items= issuesModel.getFindings();
 
         Config.exportOptionsEnum selectedOption=(Config.exportOptionsEnum)this.expoptionsPanel.getSelectedExportOption();
-        PwndocOptions pwndocOptions=null;
-        CSVOptions csvOptions=null;
-        JSONOptions jsonOptions=null;
-        XMLOptions xmlOptions=null;
-        MarkdownOptions markddownOptions=null;
-        DocxOptions docxOptions=null;
 
         switch(selectedOption){
             case Pwndoc -> pwndocOptions = this.expoptionsPanel.getPwndocOptions();
@@ -120,11 +123,64 @@ public class ExporterController
             case JSON -> jsonOptions=this.expoptionsPanel.getJSONOptions();
             case XML -> xmlOptions=this.expoptionsPanel.getXMLOptions();
             case Markdown -> markddownOptions=this.expoptionsPanel.getMarkdownOptions();
-            case Docx -> docxOptions=this.expoptionsPanel.getDocxOptions();
+            case Docx -> {
+                new SwingWorker<Void, Void>() {
+                    @Override
+                    protected Void doInBackground() throws Exception {
+                        docxOptions=ExporterController.this.expoptionsPanel.getDocxOptions();
+                        return null;
+                    }
+
+                    @Override
+                    protected void done() {
+                        //clean
+                        docxOptions.execSummary=docxOptions.execSummary.replace("\n","</w:t></w:r><w:r><w:br/><w:t>");
+                        Events.publish(new Events.ExportIssuesEvent(items,selectedOption,ExporterController.this.montoyaApi, pwndocOptions,csvOptions,jsonOptions,xmlOptions,markddownOptions,docxOptions));
+                        return;
+                    }
+                }.execute();
+            }
         }
 
         Events.publish(new Events.ExportIssuesEvent(items,selectedOption,this.montoyaApi, pwndocOptions,csvOptions,jsonOptions,xmlOptions,markddownOptions,docxOptions));
     }
+
+ */
+
+    private void exportIssues() {
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                items = issuesModel.getFindings();
+
+                selectedOption = (Config.exportOptionsEnum) ExporterController.this.expoptionsPanel.getSelectedExportOption();
+
+                switch (selectedOption) {
+                    case Pwndoc -> pwndocOptions = ExporterController.this.expoptionsPanel.getPwndocOptions();
+                    case CSV -> csvOptions = ExporterController.this.expoptionsPanel.getCSVOptions();
+                    case JSON -> jsonOptions = ExporterController.this.expoptionsPanel.getJSONOptions();
+                    case XML -> xmlOptions = ExporterController.this.expoptionsPanel.getXMLOptions();
+                    case Markdown -> markddownOptions = ExporterController.this.expoptionsPanel.getMarkdownOptions();
+                    case Docx ->  docxOptions = ExporterController.this.expoptionsPanel.getDocxOptions();
+                }
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                //clean
+                Events.publish(new Events.ExportIssuesEvent(items, selectedOption, ExporterController.this.montoyaApi, pwndocOptions, csvOptions, jsonOptions, xmlOptions, markddownOptions, docxOptions));
+                return;
+            }
+        }.execute();
+
+
+    }
+
+
+
+
+
 
     public void UpdateDebugView(Events.UpdateDebugEvent e)
     {
@@ -133,32 +189,32 @@ public class ExporterController
 
     public void PwndocExportFinished(Events.PwndocExportedEvent e)
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
+        //SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
     }
 
     public void CSVExportFinished(Events.CSVExportedEvent e)
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
+        //SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
     }
 
     public void JSONExportFinished(Events.JSONExportedEvent e)
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
+        //SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
     }
 
     public void XMLExportFinished(Events.XMLExportedEvent e)
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
+        //SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
     }
 
     public void MarkdownExportFinished(Events.MarkdownExportedEvent e)
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
+        //SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
     }
 
     public void DocxExportFinished(Events.DocxExportedEvent e)
     {
-        SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
+        //SwingUtilities.invokeLater(() -> dbgPanel.ShowPopup(e.message()));
     }
 
 }

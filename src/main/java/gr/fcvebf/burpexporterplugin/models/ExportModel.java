@@ -7,6 +7,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import burp.api.montoya.MontoyaApi;
 import gr.fcvebf.burpexporterplugin.models.pwndoc.Audit;
@@ -45,6 +47,8 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.apache.commons.text.StringEscapeUtils;
 import org.w3c.dom.CDATASection;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -80,10 +84,11 @@ public class ExportModel {
                     Export_ToXML(e.auditFindings(), e.XMLOptions().exportFilename,e.XMLOptions().includeHTTPPOC,this.montoyaApi);
                 }
                 else if (e.selectedOption() == exportOptionsEnum.Markdown) {
-                    Export_ToMarkdown(sanitizeForXML(e.auditFindings()), e.markdownOptions().exportFilename,e.markdownOptions().template,e.markdownOptions().projectName,e.markdownOptions().projectDate,e.markdownOptions().includeHTTPPOC,this.montoyaApi);
+                    Export_ToMarkdown(sanitizeForXML(e.auditFindings(),this.montoyaApi), e.markdownOptions().exportFilename,e.markdownOptions().template,e.markdownOptions().projectName,e.markdownOptions().projectDate,sanitizeForXML(e.markdownOptions().execSummary,this.montoyaApi), e.markdownOptions().includeHTTPPOC,this.montoyaApi);
                 }
                 else if (e.selectedOption() == exportOptionsEnum.Docx) {
-                    Export_ToDocx(sanitizeForXML(e.auditFindings()), e.docxOptions().exportFilename,e.docxOptions().template,e.docxOptions().projectName,e.docxOptions().projectDate, e.docxOptions().includeHTTPPOC,this.montoyaApi);
+                    e.docxOptions().execSummary = e.docxOptions().execSummary.replace("\n", "</w:t></w:r><w:r><w:br/><w:t>");
+                    Export_ToDocx(sanitizeForXML(e.auditFindings(),this.montoyaApi), e.docxOptions().exportFilename,e.docxOptions().template,e.docxOptions().projectName,e.docxOptions().projectDate,e.docxOptions().execSummary, e.docxOptions().includeHTTPPOC,this.montoyaApi);
                 }
                 else {
 
@@ -116,17 +121,33 @@ public class ExportModel {
 
                     for (Finding f : lstAuditIFindings)
                     {
-                        Events.publish(new Events.UpdateDebugEvent("Processing: " + f.issueName));
+                        Events.publish(new Events.UpdateDebugEvent("     Processing: " + f.issueName));
+
                         String issueDescrBackgr_clean = f.issueDescrBackground.replace("\n", "");
-                        //String httppoc="<p><pre><code>"+f.formattedHTTPPOC.replace("\r\n","<br/>").replace("\n","<br/>").replace("\r","")+"</pre></code></p>";
+                        //String issueDescrBackgr_clean = sanitizeForHTML(Utilities.extractText(f.issueDescrBackground),montoyaApi).replace("\n", "");
+
+                        Pattern NON_PRINTABLE_UTF_PATTERN =Pattern.compile("[\\s\\p{C}]");
+                        Matcher matcher = NON_PRINTABLE_UTF_PATTERN.matcher(f.formattedHTTPPOC2);
+                        String http_poc_filtered= matcher.replaceAll("").replace("</w:t></w:r><w:r><w:br/><w:t>","");
+
+                        //String httppoc="<p><pre><code>"+http_poc_filtered.replace("\r\n","<br/>").replace("\n","<br/>").replace("\r","")+"</pre></code></p>";
+
+
                         String httppoc = "";
-                        if (f.formattedHTTPPOC2 != null)
-                            httppoc = sanitizeForXML(f.formattedHTTPPOC2);
+                        if (f.formattedHTTPPOC2 != null) {
+                            //httppoc = sanitizeForXML(f.formattedHTTPPOC2, montoyaApi).replace("</w:t></w:r><w:r><w:br/><w:t>","");
+                            //httppoc = getAsciiOnly(f.formattedHTTPPOC2); ->WORKED
+                            httppoc=cleanStringValue(f.formattedHTTPPOC2);
+
+                        }
+
+
+                        //String remediation_cleaned =sanitizeForHTML(f.issueRemediation,montoyaApi) ;
                         String remediation_cleaned = "";
                         if (f.issueRemediation != null)
-                            remediation_cleaned = f.issueRemediation.replace("\n", "").replace("<li>", "<li><p>").replace("</li>", "</p></li>");
+                            remediation_cleaned = f.issueRemediation.replace("\n", "").replace("<li>", "<li><p>").replace("</li>", "</p></li>").replace("</w:t></w:r><w:r><w:br/><w:t>","");
 
-                        String result = p_api.AuditsCreateFinding(target_auditId, f.issueName, category, vulnType, issueDescrBackgr_clean, f.getIssueDetailsSummary(), remediation_cleaned, httppoc, "<p>" + f.getIssueDetailsSummary() + "</p>", 2, 2, Audit.cvssConverter(f.severity));
+                        String result = p_api.AuditsCreateFinding(target_auditId, f.issueName, category, vulnType, issueDescrBackgr_clean, f.getIssueDetailsSummaryPwndoc(), remediation_cleaned, httppoc, "<p>" + f.getIssueDetailsScope() + "</p>", 2, 2, Audit.cvssConverter(f.severity));
                     }
 
                     return true;
@@ -190,7 +211,7 @@ public class ExportModel {
                     row = new String[] {i.baseURL, i.issueName, capitalize(i.severity), capitalize(i.confidence), summarizeFindingsDetails(Utilities.extractText(i.issueDetails), i.URL, false), Utilities.extractText(i.issueDescrBackground), Utilities.extractText(i.issueRemediation)};
                 }
                 writer.writeNext(row);
-                String message = "Processing: " + i.issueName;
+                String message = "    Processing: " + i.issueName;
                 Events.publish(new Events.UpdateDebugEvent(message));
             }
             Events.publish(new Events.UpdateDebugEvent("\n"+Constants.msgCSVExportedSuccessfully));
@@ -241,7 +262,7 @@ public class ExportModel {
                     jsonGenerator.writeEndArray();
                 }
                 jsonGenerator.writeEndObject(); // End the JSON object
-                Events.publish(new Events.UpdateDebugEvent("Processing: "+obj.issueName));
+                Events.publish(new Events.UpdateDebugEvent("    Processing: "+obj.issueName));
             }
 
             jsonGenerator.writeEndArray(); // End the JSON array
@@ -304,7 +325,7 @@ public class ExportModel {
                         httpPocList.appendChild(poc);
                     }
                 }
-                Events.publish(new Events.UpdateDebugEvent("Processing: " + obj.issueName));
+                Events.publish(new Events.UpdateDebugEvent("    Processing: " + obj.issueName));
             }
 
             TransformerFactory transformerFactory = TransformerFactory.newInstance();
@@ -316,7 +337,7 @@ public class ExportModel {
             StreamResult result = new StreamResult(new File(xmlFileName));
             transformer.transform(source, result);
 
-            Events.publish(new Events.UpdateDebugEvent("\n" + Constants.msgXMLExportedSuccessfully));
+            Events.publish(new Events.UpdateDebugEvent("\n"+Constants.msgXMLExportedSuccessfully));
             Events.publish(new Events.XMLExportedEvent(Constants.msgXMLExportedSuccessfully));
 
         } catch (Exception e) {
@@ -327,7 +348,7 @@ public class ExportModel {
 
 
 
-    public void Export_ToMarkdown(List<Finding> lstAuditIFindings,String mdFileName,Template md_template,String projectname,String projectDate,boolean includeHTTPPOC,MontoyaApi montoyaApi)
+    public void Export_ToMarkdown(List<Finding> lstAuditIFindings,String mdFileName,Template md_template,String projectname,String projectDate,String execSummary, boolean includeHTTPPOC,MontoyaApi montoyaApi)
     {
         try (Writer out = new FileWriter(mdFileName)) {
 
@@ -340,10 +361,11 @@ public class ExportModel {
             dataModel.put("findings", lstAuditIFindings);
             dataModel.put("projectname", projectname);
             dataModel.put("projectDate", projectDate);
+            dataModel.put("execSummary",execSummary);
             dataModel.put("includeHttpRequests", includeHTTPPOC);
 
             md_template.process(dataModel, out);
-            Events.publish(new Events.UpdateDebugEvent("\n" + Constants.msgMarkdownExportedSuccessfully));
+            Events.publish(new Events.UpdateDebugEvent(Constants.msgMarkdownExportedSuccessfully));
             Events.publish(new Events.JSONExportedEvent(Constants.msgMarkdownExportedSuccessfully));
         }catch (IOException e) {
             montoyaApi.logging().logToError(Utilities.getStackTraceAsString(e));
@@ -361,7 +383,7 @@ public class ExportModel {
     }
 
 
-    public void Export_ToDocx(List<Finding> lstAuditIFindings,String outputPath,InputStream templateInputStream,String projectname,String projectDate,boolean includeHTTPPOC,MontoyaApi montoyaApi )
+    public void Export_ToDocx(List<Finding> lstAuditIFindings,String outputPath,InputStream templateInputStream,String projectname,String projectDate,String execSummary,boolean includeHTTPPOC,MontoyaApi montoyaApi )
     {
         try
         {
@@ -376,6 +398,7 @@ public class ExportModel {
             context.put("findings",lstAuditIFindings);
             context.put("projectName",projectname);
             context.put("projectDate",projectDate);
+            context.put("execSummary",execSummary);
             context.put("includeHTTPPOC",includeHTTPPOC);
 
             // Generate output docx
@@ -383,7 +406,7 @@ public class ExportModel {
                 report.process(context, out);
             }
 
-            Events.publish(new Events.UpdateDebugEvent("\n" + Constants.msgDocxExportedSuccessfully));
+            Events.publish(new Events.UpdateDebugEvent(Constants.msgDocxExportedSuccessfully));
             Events.publish(new Events.JSONExportedEvent(Constants.msgDocxExportedSuccessfully));
         } catch (Exception e) {
             //e.printStackTrace();
@@ -394,8 +417,28 @@ public class ExportModel {
 
 
 
+    public static String getAsciiOnly(String input) {
+        if (input == null) {
+            return "";
+        }
+        StringBuilder asciiOnly = new StringBuilder(input.length()); // Pre-allocate capacity
+        for (char c : input.toCharArray()) {
+            if (c >= 0 && c <= 127) { // Check if the character's Unicode value is within ASCII range
+                asciiOnly.append(c);
+            }
+        }
+        return asciiOnly.toString();
+    }
 
 
+    public static String cleanStringValue(String input) {
+        if (input == null) {
+            return null; // Keep nulls as nulls for JSON
+        }
+        Pattern REMOVE_NON_PRINTABLE_BUT_KEEP_WHITESPACE_PATTERN = Pattern.compile("\\p{C}");
+        Matcher matcher = REMOVE_NON_PRINTABLE_BUT_KEEP_WHITESPACE_PATTERN.matcher(input);
+        return matcher.replaceAll("");
+    }
 
     public String convertListToString_csv(List<String[]> items) {
         StringBuilder sb = new StringBuilder();
@@ -405,6 +448,7 @@ public class ExportModel {
         }
         return sb.toString();
     }
+
 
     public static String summarizeFindingsDetails(List<String> issueDetails,List<String> URLs,boolean asHTML) {
 
@@ -451,6 +495,39 @@ public class ExportModel {
     }
 
 
+    public static String summarizeFindingsDetailsScope(List<String> issueDetails,List<String> URLs,boolean asHTML) {
+
+
+        StringBuilder sb=new StringBuilder();
+        String newline = asHTML ? "<br/>" : System.lineSeparator();
+
+        if(issueDetails!=null) {
+            if (issueDetails.size() == 1)
+            {
+                if (URLs.size() > 0)
+                    sb.append(URLs.get(0));
+            }
+            else
+            {
+                sb = new StringBuilder();
+                for (String url : URLs) {
+                    sb.append( url + newline);
+                }
+
+            }
+        }
+        else
+        {
+            if(URLs.size()>0)
+                sb.append("The issue was identified in the following case: ").append(newline).append(URLs.get(0));
+        }
+        return sb.toString();
+    }
+
+
+
+
+
     private void appendCdataElement(Document doc, Element parent, String tagName, String textContent) {
         Element element = doc.createElement(tagName);
         CDATASection cdata = doc.createCDATASection(textContent != null ? textContent : "");
@@ -459,12 +536,13 @@ public class ExportModel {
     }
 
 
-    public static String sanitizeForXML(String input) {
+    public static String sanitizeForXML(String input,MontoyaApi montoyaApi) {
         if (input == null) return null;
 
         StringBuilder out = new StringBuilder();
         int length = input.length();
-        for (int i = 0; i < length; ) {
+        for (int i = 0; i < length; )
+        {
             int codePoint = input.codePointAt(i);
             if ((codePoint == 0x9 || codePoint == 0xA || codePoint == 0xD) ||
                     (codePoint >= 0x20 && codePoint <= 0xD7FF) ||
@@ -472,26 +550,105 @@ public class ExportModel {
                     (codePoint >= 0x10000 && codePoint <= 0x10FFFF)) {
                 out.appendCodePoint(codePoint);
             }
+            else
+            {
+                montoyaApi.logging().logToOutput("Character "+input.codePointAt(i) + " from: "+input+" was removed");
+            }
+
             i += Character.charCount(codePoint);
         }
 
-        String sanitized=out.toString();
+        String sanitized= out.toString();
+
         sanitized=sanitized.replace("&","&amp;");
 
         return sanitized;
     }
 
 
-    public static List<Finding> sanitizeForXML(List<Finding> lst)
+    public static List<Finding> sanitizeForXML(List<Finding> lst,MontoyaApi montoyaApi)
     {
         try {
             List<Finding> newlst = new ArrayList<>();
 
             for (Finding f : lst) {
                 Finding f_sanitized = org.apache.commons.lang3.SerializationUtils.clone(f);
-                f_sanitized.formattedHTTPPOC = sanitizeForXML(f.formattedHTTPPOC);
-                f_sanitized.formattedHTTPPOC2 = sanitizeForXML(f.formattedHTTPPOC2);
-                f_sanitized.issueRemediation=sanitizeForXML(f.issueRemediation);
+                f_sanitized.formattedHTTPPOC = sanitizeForXML(f.formattedHTTPPOC,montoyaApi);
+                f_sanitized.formattedHTTPPOC2 = sanitizeForXML(f.formattedHTTPPOC2,montoyaApi);
+                f_sanitized.issueRemediation=sanitizeForXML(f.issueRemediation,montoyaApi);
+                newlst.add(f_sanitized);
+            }
+            return newlst;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+
+    public static String sanitizeForHTML(String input, MontoyaApi montoyaApi) {
+        if (input == null) {
+            return null;
+        }
+
+        //first santize with input StringEscapeUtils.escapeXml11
+        StringBuilder out = new StringBuilder(StringEscapeUtils.escapeXml11(input));
+        int length = input.length();
+        for (int i = 0; i < length; ) {
+            int codePoint = input.codePointAt(i);
+
+            // Filter out non-XML 1.0 valid characters (which generally work for HTML as well)
+            // This excludes control characters like null, SOH, etc.
+            if ((codePoint == 0x9 || codePoint == 0xA || codePoint == 0xD) || // Tab, Line Feed, Carriage Return
+                    (codePoint >= 0x20 && codePoint <= 0xD7FF) ||                 // Basic Multilingual Plane (BMP) excluding surrogates
+                    (codePoint >= 0xE000 && codePoint <= 0xFFFD) ||               // BMP excluding noncharacters
+                    (codePoint >= 0x10000 && codePoint <= 0x10FFFF)) {            // Supplementary Plane characters
+
+                // Escape special HTML characters
+                switch (codePoint) {
+                    case '&':
+                        out.append("&amp;");
+                        break;
+                    case '<':
+                        out.append("&lt;");
+                        break;
+                    case '>':
+                        out.append("&gt;");
+                        break;
+                    case '\"': // Double quote for attribute values
+                        out.append("&quot;");
+                        break;
+                    case '\'': // Single quote/apostrophe for attribute values (using numeric entity for broader support)
+                        out.append("&#x27;"); // &#39; is also valid
+                        break;
+                    default:
+                        out.appendCodePoint(codePoint);
+                        break;
+                }
+            } else {
+                montoyaApi.logging().logToOutput(
+                        "Character U+" + String.format("%04X", codePoint) +
+                                " (decimal: " + codePoint + ") from: \"" + input + "\" was removed."
+                );
+            }
+
+            i += Character.charCount(codePoint);
+        }
+
+        return out.toString().replace("\n","");
+    }
+
+
+    public static List<Finding> sanitizeForHTML(List<Finding> lst,MontoyaApi montoyaApi)
+    {
+        try {
+            List<Finding> newlst = new ArrayList<>();
+
+            for (Finding f : lst) {
+                Finding f_sanitized = org.apache.commons.lang3.SerializationUtils.clone(f);
+                f_sanitized.formattedHTTPPOC = sanitizeForHTML(f.formattedHTTPPOC,montoyaApi);
+                f_sanitized.formattedHTTPPOC2 = sanitizeForHTML(f.formattedHTTPPOC2,montoyaApi);
+                f_sanitized.issueRemediation=sanitizeForHTML(f.issueRemediation,montoyaApi);
                 newlst.add(f_sanitized);
             }
             return newlst;

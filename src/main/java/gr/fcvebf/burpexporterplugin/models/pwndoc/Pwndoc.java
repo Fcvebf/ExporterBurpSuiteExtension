@@ -42,15 +42,16 @@ public class Pwndoc {
         }
         else {
             burp.api.montoya.http.message.responses.HttpResponse response = performRequestWithMontoya(papi.montoyaApi, pwndocURL, jsonPayload, "POST", null, papi.debug);
-            List<burp.api.montoya.http.message.HttpHeader> setCookieHeaders = response.headers();
-            for (burp.api.montoya.http.message.HttpHeader cookieHeader : setCookieHeaders) {
-                if (cookieHeader.toString().contains("token=")) {
-                    String tokenWithValueAndAttributes = cookieHeader.value().substring("token=".length());
-                    tokenValue = tokenWithValueAndAttributes.split(";")[0];
-                    break; // Found the token, no need to check further
+            if(response!=null) {
+                List<burp.api.montoya.http.message.HttpHeader> setCookieHeaders = response.headers();
+                for (burp.api.montoya.http.message.HttpHeader cookieHeader : setCookieHeaders) {
+                    if (cookieHeader.toString().contains("token=")) {
+                        String tokenWithValueAndAttributes = cookieHeader.value().substring("token=".length());
+                        tokenValue = tokenWithValueAndAttributes.split(";")[0];
+                        break; // Found the token, no need to check further
+                    }
                 }
             }
-
         }
         if (tokenValue != null)
         {

@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringEscapeUtils;
 import static org.apache.commons.collections.CollectionUtils.size;
@@ -23,8 +25,8 @@ public class Finding  implements Serializable {
     public String confidence;
     public List<String> URL;
     public List<String> issueDetails;
-    private String issueDetailsSummary;
-    private String issueDetailsSummaryHTML;
+    public String issueDetailsSummary;
+    public String issueDetailsSummaryHTML;
     private List<String> cleanedIssueDetails;
     public String issueDescrBackground;
     public String issueRemediation;
@@ -127,8 +129,8 @@ public class Finding  implements Serializable {
                     httpPocBuilder.append("Request\n").append(pair[0]);
                     httpPocBuilder.append("\nResponse\n").append(pair[1]).append("\n\n");
 
-                    httpPocBuilder2.append("<p>Request</p>").append("<pre><code>" + StringEscapeUtils.escapeHtml4(pair[0].replace("\r", "")) + "</code></pre>");
-                    httpPocBuilder2.append("<p><br>Response</p>").append("<pre><code>" + StringEscapeUtils.escapeHtml4(pair[1].replace("\r", "")) + "</code></pre><p><br></p>");
+                    httpPocBuilder2.append("<p>Request</p>").append("<pre><code>\n" + StringEscapeUtils.escapeHtml4(pair[0].replace("\r", "")) + "\n</code></pre>");
+                    httpPocBuilder2.append("<p><br>Response</p>").append("<pre><code>\n" + StringEscapeUtils.escapeHtml4(pair[1].replace("\r", "")) + "\n</code></pre><p><br></p>");
                 }
                 f.formattedHTTPPOC = httpPocBuilder.toString();
                 f.formattedHTTPPOC2 = httpPocBuilder2.toString();
@@ -139,6 +141,68 @@ public class Finding  implements Serializable {
             e.printStackTrace();
             throw new RuntimeException(e);
         }
+    }
+
+
+    public static String getProjectScope(List<Finding> f_list)
+    {
+        StringBuilder sb=new StringBuilder();
+        if(f_list!=null) {
+            for(Finding f:f_list)
+            {
+                if(!sb.toString().contains(f.baseURL))
+                {
+                    sb.append(f.baseURL+",");
+                }
+            }
+        }
+        if(!sb.toString().isEmpty())
+            sb.deleteCharAt(sb.length()-1);
+        return sb.toString();
+    }
+
+    public static String getProjectOverallSecurityPosture(List<Finding> f_list)
+    {
+        StringBuilder sb=new StringBuilder();
+        boolean hasHigh=false;
+        boolean hasMedium=false;
+        boolean hasLow=false;
+        boolean hasInformational=false;
+        if(f_list!=null) {
+            for(Finding f:f_list)
+            {
+                if(f.severity.toLowerCase().equals("high"))
+                    hasHigh=true;
+                if(f.severity.toLowerCase().equals("medium"))
+                    hasMedium=true;
+                if(f.severity.toLowerCase().equals("low"))
+                    hasLow=true;
+                if(f.severity.toLowerCase().equals("informational"))
+                    hasInformational=true;
+            }
+        }
+        if(hasHigh)
+            sb.append("High severity vulnerabilities have been detected, requiring immediate remediation to prevent system compromise and data breach.");
+        else
+        {
+            if(hasMedium)
+            {
+                sb.append("While no immediate, critical threats leading to unauthenticated systemic compromise were identified, prompt remediation of these findings is necessary to strengthen the organization's defenses and prevent potential adverse business impacts.");
+            }
+            else
+            {
+                if(hasLow)
+                {
+                    sb.append("Minor vulnerabilities were identified that, while present, pose a minimal direct threat to critical assets or operations and typically require specific, unlikely conditions to be exploited.");
+                }
+                else
+                {
+                    sb.append("No direct security vulnerabilities were identified; findings primarily consist of observations or best practice deviations that provide insight but carry no immediate exploitable risk.");
+                }
+            }
+        }
+
+        return sb.toString();
     }
 
 
@@ -218,6 +282,38 @@ public class Finding  implements Serializable {
         String escaped;
         //String detailsSummary=ExportModel.summarizeFindingsDetails(Utilities.extractText(issueDetails),this.URL,true);
         String detailsSummary=ExportModel.summarizeFindingsDetails(Utilities.extractText(issueDetails),this.URL,false);
+        //return extractText(detailsSummary);
+        //String cleaned=StringEscapeUtils.escapeXml11(detailsSummary);
+        //escaped = cleaned.replace("\n","</w:t></w:r><w:r><w:br/><w:t>");
+        return detailsSummary;
+    }
+
+
+    public static String cleanStringValue(String input) {
+        if (input == null) {
+            return null; // Keep nulls as nulls for JSON
+        }
+        Pattern REMOVE_NON_PRINTABLE_BUT_KEEP_WHITESPACE_PATTERN = Pattern.compile("\\p{C}");
+        Matcher matcher = REMOVE_NON_PRINTABLE_BUT_KEEP_WHITESPACE_PATTERN.matcher(input);
+        return matcher.replaceAll("");
+    }
+
+    public String getIssueDetailsSummaryPwndoc()
+    {
+        String escaped;
+        //String detailsSummary=ExportModel.summarizeFindingsDetails(Utilities.extractText(issueDetails),this.URL,true);
+        String detailsSummary=ExportModel.summarizeFindingsDetails(Utilities.extractText(issueDetails),this.URL,true);
+        //return extractText(detailsSummary);
+        //String cleaned=StringEscapeUtils.escapeXml11(detailsSummary);
+        //escaped = cleaned.replace("\n","</w:t></w:r><w:r><w:br/><w:t>");
+        return detailsSummary;
+    }
+
+    public String getIssueDetailsScope()
+    {
+        String escaped;
+        //String detailsSummary=ExportModel.summarizeFindingsDetails(Utilities.extractText(issueDetails),this.URL,true);
+        String detailsSummary=ExportModel.summarizeFindingsDetailsScope(Utilities.extractText(issueDetails),this.URL,true);
         //return extractText(detailsSummary);
         //String cleaned=StringEscapeUtils.escapeXml11(detailsSummary);
         //escaped = cleaned.replace("\n","</w:t></w:r><w:r><w:br/><w:t>");

@@ -157,11 +157,11 @@ public class HttpWrapper  implements X509TrustManager {
 
 
 
-    public static burp.api.montoya.http.message.responses.HttpResponse performRequestWithMontoya(MontoyaApi api, String urlString, String jsonPayload, String method, String extraCookie, boolean debug)
+    public static burp.api.montoya.http.message.responses.HttpResponse performRequestWithMontoya(MontoyaApi m_api, String urlString, String jsonPayload, String method, String extraCookie, boolean debug)
     {
         try {
 
-            Http http = api.http();
+            Http http = m_api.http();
 
             URI uri = URI.create(urlString);
             String host = uri.getHost();
@@ -204,16 +204,17 @@ public class HttpWrapper  implements X509TrustManager {
             burp.api.montoya.http.message.HttpRequestResponse reqres = http.sendRequest(httprequest,requestOptions);
 
             if (debug) {
-                api.logging().logToOutput("-------------------------  Request -------------------------");
-                //api.logging().logToOutput("URL: " + urlString);
-                //api.logging().logToOutput("Method: " + method);
-                //api.logging().logToOutput("Body: " + jsonPayload);
-                api.logging().logToOutput(rawRequest.toString());
-                api.logging().logToOutput("---  Response ---");
-                //api.logging().logToOutput("Status Code: " + reqres.response().statusCode());
-                //api.logging().logToOutput("Headers: " + reqres.response().headers());
-                //api.logging().logToOutput("Body: " +reqres.response().body());
-                api.logging().logToOutput(reqres.response().toString());
+                m_api.logging().logToOutput("\n------------------------------------------  Request ------------------------------------------");
+                if(rawRequest!=null)
+                    m_api.logging().logToOutput(rawRequest.toString());
+                else
+                    m_api.logging().logToOutput("EMPTY REQUEST....");
+
+                m_api.logging().logToOutput("---  Response ---");
+                if(reqres !=null && reqres.response()!=null)
+                    m_api.logging().logToOutput(reqres.response().toString());
+                else
+                    m_api.logging().logToOutput("EMPTY RESPONSE....");
             }
 
             return reqres.response();

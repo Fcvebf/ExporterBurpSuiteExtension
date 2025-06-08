@@ -47,6 +47,10 @@ public class Events
     {
     }
 
+    public record AddIssuesEventToModel(List<AuditIssue> auditIssues) implements Event
+    {
+    }
+
     public record RemoveSelectedIssues() implements Event
     {
     }

@@ -33,7 +33,7 @@ public class IssuesExporter implements BurpExtension {
 
             //Views Initialization
             DebugPanel dbgPanel=new DebugPanel();
-            ExportOptionsPanel expOptionsPanel=new ExportOptionsPanel(montoyaApi);
+            ExportOptionsPanel expOptionsPanel=new ExportOptionsPanel(montoyaApi,dbgPanel);
             ExportPanel exportPanel = new ExportPanel(expOptionsPanel,dbgPanel);
             IssuesExporterTab exporterTab = new IssuesExporterTab(issuesPanel,exportPanel);
 

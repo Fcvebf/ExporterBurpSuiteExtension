@@ -10,6 +10,8 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.font.TextAttribute;
 import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.format.DateTimeFormatter;
@@ -23,6 +25,7 @@ import java.time.LocalDate;
 import java.util.concurrent.ExecutionException;
 
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import freemarker.template.*;
 
 import freemarker.template.Template;
@@ -37,6 +40,7 @@ import static gr.fcvebf.burpexporterplugin.utils.Config.useMontoyaHTTPApi;
 public class ExportOptionsPanel extends JPanel {
 
     private ExporterController exporterController;
+    private DebugPanel dbgPanel;
 
     private JComboBox<Config.exportOptionsEnum> dropdown_exportoptions;
     private JButton btnExport;
@@ -49,6 +53,8 @@ public class ExportOptionsPanel extends JPanel {
     private JPanel XMLOptions;
     private JPanel MarkdownOptions;
     private JPanel DocxOptions;
+    public ExecSummaryPanel docxExecSumPanel;
+    public ExecSummaryPanel mdExecSumPanel;
     JPanel pwndocAuditSelectionOptions;
     JPanel pwndocFindingsOptions;
 
@@ -95,17 +101,17 @@ public class ExportOptionsPanel extends JPanel {
 
 
 
-    public ExportOptionsPanel(MontoyaApi montoyaApi)
+    public ExportOptionsPanel(MontoyaApi montoyaApi,DebugPanel dbgPanel)
     {
         this.montoyaApi=montoyaApi;
-        //super(new BorderLayout());
-        //super(new BoxLayout(this,BoxLayout.Y_AXIS));
+        this.dbgPanel=dbgPanel;
         setLayout(new BoxLayout(this,BoxLayout.Y_AXIS));
         setBorder(new EmptyBorder(20, 20, 20, 20));
 
+        //NORTH PANE; IS THE EXPORT OPTIONS DROP DOWN
         JPanel expOptionsPanel = new JPanel();
         expOptionsPanel.setPreferredSize(new Dimension(200, 100));
-        expOptionsPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
+        //expOptionsPanel.setLayout(new FlowLayout(FlowLayout.LEFT));
         expOptionsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel expformatLabel = new JLabel("Export Format",JLabel.LEFT );
@@ -115,10 +121,11 @@ public class ExportOptionsPanel extends JPanel {
         expOptionsPanel.add(expformatLabel);
         expOptionsPanel.add(dropdown_exportoptions);
 
-
         JPanel northPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         northPanel.add(expOptionsPanel);
 
+
+        //WEST PANEL: THIS WILL CONTAIN THE VISIBLE PANEL EVERY TIME
         JPanel westPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         CreatePwndocPanel();
         CreateCSVPanel();
@@ -208,20 +215,35 @@ public class ExportOptionsPanel extends JPanel {
             else {
 
             }
+            //westPanel.revalidate();
+            //westPanel.repaint();
+            updateDividerLocation();
 
         });
 
-
+        //CENTER PANEL: SPACE
         JPanel centerPanel = new JPanel();
         centerPanel.setPreferredSize(new Dimension(0, 350));
         centerPanel.add(new JLabel(""));
+
         this.add(northPanel,BorderLayout.NORTH);
         this.add(westPanel,BorderLayout.WEST);
         this.add(centerPanel, BorderLayout.CENTER);
-        //this.add(Box.createVerticalStrut(150));  // 20px vertical space
-        //this.add(southPanel,BorderLayout.SOUTH);
 
     }
+
+
+    private void updateDividerLocation()
+    {
+        Component currentVisibleComponent = ExportOptionsPanel.this;
+        JSplitPane splitpane = (JSplitPane) this.getParent().getParent().getComponents()[0];
+
+        int preferredWidth = currentVisibleComponent.getPreferredSize().width;
+        preferredWidth += this.getInsets().left + this.getParent().getInsets().right;
+
+        splitpane.setDividerLocation(preferredWidth + splitpane.getDividerSize());
+    }
+
 
 
 
@@ -333,7 +355,6 @@ public class ExportOptionsPanel extends JPanel {
         pwndocAuditSelectionOptions.setAlignmentX(Component.LEFT_ALIGNMENT);
         pwndocAuditSelectionOptions.setLayout(new GridBagLayout());
         pwndocAuditSelectionOptions.setBorder(BorderFactory.createTitledBorder("Audit Options"));
-        gbc = new GridBagConstraints();
 
         gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.BOTH;
@@ -447,7 +468,8 @@ public class ExportOptionsPanel extends JPanel {
 
 
 
-    private void fetchPwndocDataInBackground() {
+    private void fetchPwndocDataInBackground()
+    {
         new SwingWorker<Boolean, Void>() {
             private List<AuditType> auditTypes;
             private List<Language> languages;
@@ -457,7 +479,11 @@ public class ExportOptionsPanel extends JPanel {
             @Override
             protected Boolean doInBackground() throws Exception {
                 // Perform login
-                p_api = new PwndocApi(txt_pwndocURL.getText(),null,debugHTTPrequests,useMontoyaHTTPApi,montoyaApi);
+                ProxyConfig proxy_conf=null;
+                if(Config.proxyHTTPrequests)
+                    proxy_conf=new ProxyConfig(Config.default_proxyHost,Config.default_proxyPort);
+
+                p_api = new PwndocApi(txt_pwndocURL.getText(),proxy_conf,debugHTTPrequests,useMontoyaHTTPApi,montoyaApi);
                 boolean logged_in = p_api.Login(txt_pwndocuser.getText(), new String(txt_pwndocpassword.getPassword()));
                 if (logged_in)
                 {
@@ -918,6 +944,17 @@ public class ExportOptionsPanel extends JPanel {
                 }
             }
         });
+
+
+        //Add exec summary
+        mdExecSumPanel=new ExecSummaryPanel(this.montoyaApi, debugHTTPrequests,this.exporterController,true);
+        gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.anchor=GridBagConstraints.WEST;
+        gbc.gridy = 5;
+        gbc.gridwidth=2;
+        MarkdownOptions.add(mdExecSumPanel,gbc);
+
     }
 
 
@@ -1135,6 +1172,18 @@ public class ExportOptionsPanel extends JPanel {
             }
         });
 
+
+
+
+        //Add exec summary
+        docxExecSumPanel=new ExecSummaryPanel(this.montoyaApi, debugHTTPrequests,this.exporterController,false);
+        gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.anchor=GridBagConstraints.WEST;
+        gbc.gridy = 5;
+        gbc.gridwidth=2;
+        DocxOptions.add(docxExecSumPanel,gbc);
+
     }
 
 
@@ -1224,14 +1273,19 @@ public class ExportOptionsPanel extends JPanel {
 
 
 
-    public void setController(ExporterController exporterController) {
+    public void setController(ExporterController exporterController)
+    {
         this.exporterController=exporterController;
+        this.docxExecSumPanel.exportController=exporterController;
+        this.mdExecSumPanel.exportController=exporterController;
 
         btnExport = new JButton("Export");
         btnExport.addActionListener(e -> {
-
+            SwingUtilities.invokeLater(() -> dbgPanel.clearArea());
+            Events.publish(new Events.UpdateDebugEvent(Constants.export_Validatingdata+"\n"));
             boolean allok = validateBeforeExport();
             if (allok) {
+                Events.publish(new Events.UpdateDebugEvent(Constants.export_ExportStarted+"\n"));
                 //For pwndoc, raise a pop up in case the auditname already exists. if user confirms, it will append the audits to it
                 if (dropdown_exportoptions.getSelectedItem() == exportOptionsEnum.Pwndoc)
                 {
@@ -1268,18 +1322,17 @@ public class ExportOptionsPanel extends JPanel {
 
         if(dropdown_exportoptions.getSelectedItem()== exportOptionsEnum.Pwndoc)
         {
+            String pwndocURLtemp="";
             errorMsg=validatePwndocLogin();
             if(txt_auditname.getText().strip()=="")
             {
                 errorMsg=Constants.msgMissingPwnDocAudit;
             }
-            else if(!cmb_PwndocAuditType.isEnabled())
+            if(!cmb_PwndocAuditType.isEnabled())
             {
                 errorMsg=Constants.msgPwnDocLoginFirst;
             }
-            else {
-                //all ok
-            }
+
         }
         else if(dropdown_exportoptions.getSelectedItem()== exportOptionsEnum.CSV)
         {
@@ -1304,6 +1357,7 @@ public class ExportOptionsPanel extends JPanel {
         }
         else if(dropdown_exportoptions.getSelectedItem()== exportOptionsEnum.Markdown)
         {
+            String execSummaryErrormsg="";
             if(txt_MarkdownOutFile.getText().strip()=="")
             {
                 errorMsg=Constants.msgMissingMarkdownOutFile;
@@ -1314,9 +1368,15 @@ public class ExportOptionsPanel extends JPanel {
                     errorMsg = Constants.msgMissingMarkdownTemplateFile;
                 }
             }
+            execSummaryErrormsg=mdExecSumPanel.validate_AIOptions();
+            if(!execSummaryErrormsg.isEmpty())
+            {
+                errorMsg=execSummaryErrormsg;
+            }
         }
         else if(dropdown_exportoptions.getSelectedItem()== exportOptionsEnum.Docx)
         {
+            String execSummaryErrormsg="";
             if(txt_DocxOutFile.getText().strip()=="")
             {
                 errorMsg=Constants.msgMissingDocxOutFile;
@@ -1326,6 +1386,12 @@ public class ExportOptionsPanel extends JPanel {
                 if (txt_DocxTemplateFile.getText().strip() == "") {
                     errorMsg = Constants.msgMissingDocxTemplateFile;
                 }
+            }
+
+            execSummaryErrormsg=docxExecSumPanel.validate_AIOptions();
+            if(!execSummaryErrormsg.isEmpty())
+            {
+                errorMsg=execSummaryErrormsg;
             }
         }
         else
@@ -1356,11 +1422,19 @@ public class ExportOptionsPanel extends JPanel {
         {
             errorMsg=Constants.msgMissingPwnDocURL;
         }
-        else if(txt_pwndocuser.getText().strip()=="")
+        //validate if Pwndoc URL Is valid URL
+        try {
+            boolean isvalidURL=Utilities.isValidURL(txt_pwndocURL.getText().trim());
+            if (!isvalidURL)
+                errorMsg=Constants.msgNotValidUrl;
+        } catch (MalformedURLException ex) {
+            errorMsg=Constants.msgNotValidUrl; // String is not a well-formed URL
+        }
+        if(txt_pwndocuser.getText().strip()=="")
         {
             errorMsg=Constants.msgMissingPwnDocUser;
         }
-        else if( (new String(txt_pwndocpassword.getPassword())).strip() =="")
+        if( (new String(txt_pwndocpassword.getPassword())).strip() =="")
         {
             errorMsg=Constants.msgMissingPwnDocPass;
         }
@@ -1368,7 +1442,8 @@ public class ExportOptionsPanel extends JPanel {
     }
 
 
-    public exportOptionsEnum getSelectedExportOption() {
+    public exportOptionsEnum getSelectedExportOption()
+    {
         return (Config.exportOptionsEnum) this.dropdown_exportoptions.getSelectedItem();
     }
 
@@ -1407,7 +1482,8 @@ public class ExportOptionsPanel extends JPanel {
     }
 
 
-    public MarkdownOptions getMarkdownOptions()  {
+    public MarkdownOptions getMarkdownOptions()
+    {
         try {
             Configuration cfg = new Configuration(Configuration.VERSION_2_3_32);
             cfg.setDefaultEncoding("UTF-8");
@@ -1426,7 +1502,7 @@ public class ExportOptionsPanel extends JPanel {
                 }
             }
 
-            return new MarkdownOptions(this.txt_MarkdownOutFile.getText(),template,txt_MarkdownProjectName.getText().trim(),txt_MarkdownProjectDate.getText().trim(),chkMarkdownIncludeHTTPOC.isSelected());
+            return new MarkdownOptions(this.txt_MarkdownOutFile.getText(),template,txt_MarkdownProjectName.getText().trim(),txt_MarkdownProjectDate.getText().trim(),this.mdExecSumPanel.getExecutiveSummaryTextMD(),chkMarkdownIncludeHTTPOC.isSelected());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -1434,7 +1510,8 @@ public class ExportOptionsPanel extends JPanel {
 
 
 
-    public DocxOptions getDocxOptions()  {
+    public DocxOptions getDocxOptions()
+    {
         try {
             InputStream templateStream;
             if(radioDocxDefaultTemplate.isSelected())
@@ -1445,7 +1522,7 @@ public class ExportOptionsPanel extends JPanel {
             {
                 templateStream = new FileInputStream(new File(txt_DocxTemplateFile.getText()));
             }
-            return new DocxOptions(this.txt_DocxOutFile.getText(),templateStream,txt_DocxProjectName.getText().trim(),txt_DocxProjectDate.getText().trim(),chkDocxIncludeHTTPOC.isSelected());
+            return new DocxOptions(this.txt_DocxOutFile.getText(),templateStream,txt_DocxProjectName.getText().trim(),txt_DocxProjectDate.getText().trim(),this.docxExecSumPanel.getExecutiveSummaryText(),chkDocxIncludeHTTPOC.isSelected());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -1453,7 +1530,8 @@ public class ExportOptionsPanel extends JPanel {
 
 
 
-    public void disableComponents(Container container) {
+    public void disableComponents(Container container)
+    {
         container.setEnabled(false);
         for (Component comp : container.getComponents()) {
             if (comp instanceof Container) {
@@ -1463,7 +1541,8 @@ public class ExportOptionsPanel extends JPanel {
         }
     }
 
-    public void enableComponents(Container container) {
+    public void enableComponents(Container container)
+    {
         container.setEnabled(true);
         for (Component comp : container.getComponents()) {
             if (comp instanceof Container) {

@@ -1,9 +1,11 @@
 package gr.fcvebf.burpexporterplugin.utils;
 
+import org.apache.commons.validator.routines.UrlValidator;
 import org.jsoup.Jsoup;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -61,5 +63,23 @@ public class Utilities
     }
 
 
+    public static boolean isValidURL(String url) throws MalformedURLException {
+        if (url.length()>Constants.msgMaxTextField)
+            return false;
+        UrlValidator validator = new UrlValidator();
+        return validator.isValid(url);
+    }
+
+    public static boolean isValidInt(String str) {
+        if (str == null || str.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            Integer.parseInt(str.trim()); // trim() to handle leading/trailing spaces
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
 
 }

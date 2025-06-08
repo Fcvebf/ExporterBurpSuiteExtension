@@ -43,7 +43,12 @@ This document contains confidential information intended solely for the recipien
 </#list>
 <div style="page-break-after: always;"></div>
 
-## 📘 Executive Summary
+## Executive Summary
+
+${execSummary}
+
+
+## 📘 Findings Summary
 
 The following table presents the identified security findings resulting from the assessment. Each finding includes a brief description, severity rating, and relevant details to support risk evaluation and remediation efforts. These findings are intended to provide actionable insights to improve the organization’s overall security posture.
 
@@ -69,10 +74,18 @@ The following table presents the identified security findings resulting from the
 - **HTTP Requests**:
   <#list finding.HTTPPOC as poc>
    - **HTTP Request**:
-     <pre><code>${poc[0]?html}</code></pre>
+<pre>
+<code>
+${poc[0]?html}
+</code>
+</pre>
 
    - **HTTP Response**:
-     <pre><code>${poc[1]?html}</code></pre>
+<pre>
+<code>
+${poc[1]?html}
+</code>
+</pre>
 
     <div style="page-break-after: always;"></div>
   </#list>

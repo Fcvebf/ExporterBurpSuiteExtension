@@ -1,5 +1,7 @@
 package gr.fcvebf.burpexporterplugin.view;
 
+import gr.fcvebf.burpexporterplugin.utils.Config;
+
 import javax.swing.*;
 import javax.swing.BoxLayout;
 import javax.swing.JPanel;
@@ -20,6 +22,19 @@ public class DebugPanel  extends JPanel {
         txtAreaLogs.setEditable(false);
         txtAreaLogs.setWrapStyleWord(true);
         txtAreaLogs.setBorder(BorderFactory.createLineBorder(Color.BLACK));
+
+        Font currentFont = txtAreaLogs.getFont();
+        int currentSize = currentFont.getSize();
+        int newSize = currentSize + 2;
+        Font newFont = new Font(currentFont.getName(), currentFont.getStyle(), newSize);
+        txtAreaLogs.setFont(newFont);
+
+        //style
+        if(Config.applyFormat)
+        {
+            txtAreaLogs.setBackground(Color.BLACK);
+            txtAreaLogs.setForeground(Color.GREEN);
+        }
 
         this.add(new JScrollPane(txtAreaLogs));
 
