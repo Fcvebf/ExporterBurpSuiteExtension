@@ -5,7 +5,7 @@ This Burp Suite extension allows the user to upload the identified security issu
 * Export options: Pwndoc, CSV, JSON, XML, Markdown and Docx.
 * Option to include also the full HTTP Requests/Responses of the Security issues.
 * Custom template support for Markdown (Apache FreeMarker) or Docx (XDocReport with Apache Velocity engine).
-* AI-enabled executive summary generation, using Ollama.
+* AI-enabled executive summary generation, using Burp AI.
 * Only the user-selected security issues are exported
 * The Security issues are sorted by severity, confidence and name
 

@@ -47,10 +47,13 @@ public class Constants {
     public static final String initial_LLMPromptMD="No issues have been found!";
     public static final String AIOptions_ollamaEndpointEmpty="Please provide a valid Ollama API URL!";
     public static final String AIOptions_ollamaModelNotSelected="Please click 'Connect' and select a model!";
+    public static final String BurpAI_notEnabledInBurp="AI is not enabled. Enable it in Burp.";
+    public static final String BurpI_defaultsystemMessage="You are a web security assistant specialized in summarizing security findings and proposing remediation actions.";
 
     public static final String export_Validatingdata="-> Validating user data...";
     public static final String export_ExportStarted="-> Export started...";
     public static final String export_AIGeneratingSummary="-> Generating the executive summary...";
+    public static final String export_AI_Error="-> A Burp AI Exception has occurred. Check the Extensions tab for more info...";
 
 
 }

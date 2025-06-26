@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.util.concurrent.ExecutionException;
 
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.ai.Ai;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import freemarker.template.*;
 
@@ -98,12 +99,13 @@ public class ExportOptionsPanel extends JPanel {
     JLabel lblDocxloadDefaultTemplate;
 
     public MontoyaApi montoyaApi;
+    public Ai ai;
 
 
-
-    public ExportOptionsPanel(MontoyaApi montoyaApi,DebugPanel dbgPanel)
+    public ExportOptionsPanel(MontoyaApi montoyaApi,Ai ai, DebugPanel dbgPanel)
     {
         this.montoyaApi=montoyaApi;
+        this.ai=ai;
         this.dbgPanel=dbgPanel;
         setLayout(new BoxLayout(this,BoxLayout.Y_AXIS));
         setBorder(new EmptyBorder(20, 20, 20, 20));
@@ -947,7 +949,7 @@ public class ExportOptionsPanel extends JPanel {
 
 
         //Add exec summary
-        mdExecSumPanel=new ExecSummaryPanel(this.montoyaApi, debugHTTPrequests,this.exporterController,true);
+        mdExecSumPanel=new ExecSummaryPanel(this.montoyaApi, debugHTTPrequests,this.exporterController,true,Config.useOnlyBurpAI);
         gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.BOTH;
         gbc.anchor=GridBagConstraints.WEST;
@@ -1176,7 +1178,7 @@ public class ExportOptionsPanel extends JPanel {
 
 
         //Add exec summary
-        docxExecSumPanel=new ExecSummaryPanel(this.montoyaApi, debugHTTPrequests,this.exporterController,false);
+        docxExecSumPanel=new ExecSummaryPanel(this.montoyaApi, debugHTTPrequests,this.exporterController,false,Config.useOnlyBurpAI);
         gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.BOTH;
         gbc.anchor=GridBagConstraints.WEST;

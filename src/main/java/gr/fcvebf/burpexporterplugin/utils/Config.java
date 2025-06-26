@@ -1,5 +1,7 @@
 package gr.fcvebf.burpexporterplugin.utils;
 
+import org.apache.xmlbeans.impl.xb.xsdschema.Public;
+
 public class Config {
 
 
@@ -17,4 +19,5 @@ public class Config {
     public static int LLMdefaultTemperature = 20;
 
     public static boolean applyFormat=false;
+    public static boolean useOnlyBurpAI=true;
 }

@@ -12,6 +12,7 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.ai.chat.*;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import gr.fcvebf.burpexporterplugin.controllers.ExporterController;
 import gr.fcvebf.burpexporterplugin.models.ExportModel;
@@ -26,9 +27,12 @@ import gr.fcvebf.burpexporterplugin.utils.Utilities;
 import org.apache.commons.math3.ml.neuralnet.twod.NeuronSquareMesh2D;
 import org.apache.commons.text.StringEscapeUtils;
 
+import burp.api.montoya.ai.chat.PromptResponse;
+
 import javax.swing.*;
 import javax.swing.BoxLayout;
 import javax.swing.JPanel;
+import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -44,6 +48,7 @@ public class ExecSummaryPanel extends JPanel {
     JRadioButton radioExecSumMode_userSupplied;
     JRadioButton radioExecSumMode_AIgenerated;
     JPanel AIOptionsPanel;
+    JPanel BurpAIOptionsPanel;
     public JTextField txtOllamaEndpoint;
     public MontoyaApi montoyapi;
     public Boolean debug;
@@ -60,9 +65,13 @@ public class ExecSummaryPanel extends JPanel {
     private Boolean UserAddedMoreIssues = false;
     private Boolean IssuedRemovedByUser = false;
     public String LLMPrompt = Constants.initial_LLMPrompt;
+    public String systemMessage=Constants.BurpI_defaultsystemMessage;
+    public String userMessage="";
+
 
     private OllamaClient ollama_client;
     public boolean useMarkdown;
+    public boolean useOnlyBurpAI;
     private float LLMTemperature;
     // Constants for slider
     private static final int SLIDER_MIN = 0;       // Corresponds to 0.0 temperature
@@ -90,14 +99,24 @@ Your core characteristics are:
             return execsum;
         }
         else {
-            /*
-            ollamaQueryLLM(this.cmb_OllamaModels.getSelectedItem().toString(), LLMPrompt);
-            return  this.ExecutiveSummary_AIgenerated;
-             */
-            String model = cmb_OllamaModels.getSelectedItem().toString();
-            String result = ollamaQueryLLMBlocking(model, LLMPrompt);
-            this.ExecutiveSummary_AIgenerated = result;
-            return result;
+            if (this.useOnlyBurpAI)
+            {
+                String result = BurpAIQueryLLMBlocking(systemMessage,userMessage,LLMTemperature);
+                this.ExecutiveSummary_AIgenerated = result;
+                return result;
+            }
+            else
+            {
+
+                /*
+                ollamaQueryLLM(this.cmb_OllamaModels.getSelectedItem().toString(), LLMPrompt);
+                return  this.ExecutiveSummary_AIgenerated;
+                 */
+                String model = cmb_OllamaModels.getSelectedItem().toString();
+                String result = ollamaQueryLLMBlocking(model, LLMPrompt);
+                this.ExecutiveSummary_AIgenerated = result;
+                return result;
+            }
         }
 
     }
@@ -110,15 +129,25 @@ Your core characteristics are:
             execsum = ExecutiveSummary_userSupplied;
             return execsum;
         }
-        else {
-            /*
-            ollamaQueryLLM(this.cmb_OllamaModels.getSelectedItem().toString(), LLMPrompt);
-            return  this.ExecutiveSummary_AIgenerated;
-             */
-            String model = cmb_OllamaModels.getSelectedItem().toString();
-            String result = ollamaQueryLLMBlocking(model, LLMPrompt);
-            this.ExecutiveSummary_AIgenerated = result;
-            return result;
+        else
+        {
+            if (this.useOnlyBurpAI)
+            {
+                String result =BurpAIQueryLLMBlocking(systemMessage,userMessage,LLMTemperature);
+                this.ExecutiveSummary_AIgenerated = result;
+                return result;
+            }
+            else
+            {
+                /*
+                ollamaQueryLLM(this.cmb_OllamaModels.getSelectedItem().toString(), LLMPrompt);
+                return  this.ExecutiveSummary_AIgenerated;
+                 */
+                String model = cmb_OllamaModels.getSelectedItem().toString();
+                String result = ollamaQueryLLMBlocking(model, LLMPrompt);
+                this.ExecutiveSummary_AIgenerated = result;
+                return result;
+            }
         }
 
     }
@@ -132,13 +161,14 @@ Your core characteristics are:
 
 
 
-    public ExecSummaryPanel(MontoyaApi montoyapi,Boolean debug,ExporterController exportController,boolean useMarkdown)
+    public ExecSummaryPanel(MontoyaApi montoyapi,Boolean debug,ExporterController exportController,boolean useMarkdown,boolean useOnlyBurpAI)
     {
         super();
         this.montoyapi=montoyapi;
         this.debug=debug;
         this.exportController=exportController;
         this.useMarkdown=useMarkdown;
+        this.useOnlyBurpAI=useOnlyBurpAI;
 
         Events.subscribe(Events.AddIssuesEventToModel.class, e -> IssuesAdded());
         Events.subscribe(Events.RemoveAllIssues.class, e -> IssuesRemoved());
@@ -190,14 +220,15 @@ Your core characteristics are:
             public void mouseClicked(MouseEvent e) {
                 // Get the parent Frame for the dialog
                 Frame parentFrame = (Frame) SwingUtilities.getWindowAncestor(ExecSummaryPanel.this);
+                String[] updatedText=new String[2];
 
                 // Create and show the custom dialog
-                EditTextDialog dialog = new EditTextDialog(parentFrame, ExecutiveSummary_userSupplied,ExecutiveSummary_userSupplied, "Edit Executive Summary");
-                String updatedText = dialog.showDialog(); // This will block until dialog is closed
+                EditTextDialog dialog = new EditTextDialog(parentFrame,false, ExecutiveSummary_userSupplied,ExecutiveSummary_userSupplied,"","","","", "Edit Executive Summary");
+                updatedText = dialog.showDialog(); // This will block until dialog is closed
 
                 // Check if text was saved (not cancelled)
                 if (updatedText != null) {
-                    ExecutiveSummary_userSupplied = updatedText;
+                    ExecutiveSummary_userSupplied = updatedText[0];
                     //ExecSummaryPanel.this.montoyapi.logging().logToOutput(ExecutiveSummaryText);
                 }
             }
@@ -229,34 +260,63 @@ Your core characteristics are:
             @Override
             public void mouseClicked(MouseEvent e) {
                 EditTextDialog dialog;
-                String updatedText;
+                String[] updatedText=new String[2];
 
                 // Get the parent Frame for the dialog
                 Frame parentFrame = (Frame) SwingUtilities.getWindowAncestor(ExecSummaryPanel.this);
-                String defaultPrompt=GenerateInitialPrompt(ExecSummaryPanel.this.exportController.issuesModel.getFindings());
 
-                // Create and show the custom dialog
-                if(!PromptUpdatedByUser || UserAddedMoreIssues)
+                if (useOnlyBurpAI)
                 {
-                    UserAddedMoreIssues=false;
-                    LLMPrompt = defaultPrompt;
+                    String defaultUserPrompt = GenerateInitialUserPrompt(ExecSummaryPanel.this.exportController.issuesModel.getFindings());
+
+                    // Create and show the custom dialog
+                    if (!PromptUpdatedByUser || UserAddedMoreIssues) {
+                        UserAddedMoreIssues = false;
+                        systemMessage = Constants.BurpI_defaultsystemMessage;
+                        userMessage=defaultUserPrompt;
+                    }
+                    if (IssuedRemovedByUser) {
+                        IssuedRemovedByUser = false;
+                        systemMessage = Constants.BurpI_defaultsystemMessage;
+                        userMessage = Constants.initial_LLMPrompt;
+                    }
+                    dialog = new EditTextDialog(parentFrame, ExecSummaryPanel.this.useOnlyBurpAI, LLMPrompt, "", systemMessage,userMessage, Constants.BurpI_defaultsystemMessage,defaultUserPrompt , "Edit the LLM Prompt");
+
+                    updatedText = dialog.showDialog(); // This will block until dialog is closed
+
+                    // Check if text was saved (not cancelled)
+                    if(updatedText!=null) {
+                        if (updatedText[0] != null || updatedText[1] != null) {
+                            systemMessage = updatedText[0];
+                            userMessage = updatedText[1];
+                            PromptUpdatedByUser = true;
+                        }
+                    }
                 }
-                if(IssuedRemovedByUser)
+                else
                 {
-                    IssuedRemovedByUser=false;
-                    LLMPrompt= Constants.initial_LLMPrompt;
+                    String defaultPrompt = GenerateInitialPrompt(ExecSummaryPanel.this.exportController.issuesModel.getFindings());
+
+                    // Create and show the custom dialog
+                    if (!PromptUpdatedByUser || UserAddedMoreIssues) {
+                        UserAddedMoreIssues = false;
+                        LLMPrompt = defaultPrompt;
+                    }
+                    if (IssuedRemovedByUser) {
+                        IssuedRemovedByUser = false;
+                        LLMPrompt = Constants.initial_LLMPrompt;
+                    }
+                    dialog = new EditTextDialog(parentFrame, ExecSummaryPanel.this.useOnlyBurpAI, LLMPrompt, defaultPrompt, "", "", "", "", "Edit the LLM Prompt");
+
+                    updatedText = dialog.showDialog(); // This will block until dialog is closed
+
+                    // Check if text was saved (not cancelled)
+                    if (updatedText[0] != null) {
+                        LLMPrompt = updatedText[0];
+                        PromptUpdatedByUser=true;
+                    }
                 }
 
-
-                dialog = new EditTextDialog(parentFrame, LLMPrompt, defaultPrompt, "Edit the LLM Prompt");
-
-                updatedText = dialog.showDialog(); // This will block until dialog is closed
-
-                // Check if text was saved (not cancelled)
-                if (updatedText != null) {
-                    LLMPrompt = updatedText;
-                    PromptUpdatedByUser=true;
-                }
             }
         });
 
@@ -274,133 +334,204 @@ Your core characteristics are:
         this.add(panelExecSumModes,gbc);
 
 
-        //AI OPtions
-        AIOptionsPanel = new JPanel(new GridBagLayout());
-        AIOptionsPanel.setBorder(BorderFactory.createTitledBorder("Ollama options"));
-        gbc = new GridBagConstraints();
-        //gbc.fill = GridBagConstraints.BOTH;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridy = 1;
-        gbc.gridx=0;
-        //gbc.gridwidth=2;
-        this.add(AIOptionsPanel,gbc);
+        if (useOnlyBurpAI)
+        {
+            //Burp AI Options
+            BurpAIOptionsPanel = new JPanel(new GridBagLayout());
+            BurpAIOptionsPanel.setBorder(BorderFactory.createTitledBorder("Burp AI options"));
+            gbc = new GridBagConstraints();
+            //gbc.fill = GridBagConstraints.BOTH;
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.gridy = 1;
+            gbc.gridx = 0;
+            //gbc.gridwidth=2;
+            this.add(BurpAIOptionsPanel, gbc);
 
 
-        JLabel lblOllama=new JLabel("Ollama Endpoint");
-        gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridy = 0;
-        gbc.gridx=0;
-        gbc.weightx=0.2f;
-        AIOptionsPanel.add(lblOllama,gbc);
 
-        txtOllamaEndpoint = new JTextField(15);
-        txtOllamaEndpoint.setText("http://127.0.0.1:11434");
-        gbc.gridx = 1;
-        gbc.weightx=0.7f;
-        AIOptionsPanel.add(txtOllamaEndpoint,gbc);
+            //temperature Slider
+            temperatureLabel = new JLabel("Temperature");
+            temperatureLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            //temperatureValueLabel.setFont(new Font("Arial", Font.BOLD, 16));
 
-        gbc.gridx = 2;
-        gbc.weightx=0.1f;
-        JButton btnOllamaConnect = new JButton("Connect");
-        btnOllamaConnect.addActionListener(e -> {
-            String error_msg=validate_AIConnect();
-            if(error_msg.isEmpty())
-                ollamaConnectInBackground();
-            else
-            {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(null, error_msg, "Validation Error", JOptionPane.WARNING_MESSAGE);
-                });
-            }
-
-        });
-        AIOptionsPanel.add(btnOllamaConnect,gbc);
+            this.LLMTemperature = (float) SLIDER_INITIAL / SLIDER_SCALE;
+            temperatureSlider = new JSlider(JSlider.HORIZONTAL, SLIDER_MIN, SLIDER_MAX, SLIDER_INITIAL);
+            temperatureSlider.setMajorTickSpacing(50);
+            temperatureSlider.setMinorTickSpacing(10);
+            temperatureSlider.setPaintTicks(true);
+            temperatureSlider.setPaintLabels(true);
 
 
-        //2nd row
-        JLabel lblOllamaModels=new JLabel("Ollama Models");
-        //gbc = new GridBagConstraints();
-        //gbc.fill = GridBagConstraints.BOTH;
-        gbc = new GridBagConstraints();
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridy = 1;
-        gbc.gridx=0;
-        AIOptionsPanel.add(lblOllamaModels,gbc);
+            gbc = new GridBagConstraints();
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.gridy = 1;
+            gbc.gridx = 0;
+            BurpAIOptionsPanel.add(temperatureLabel, gbc);
 
-        cmb_OllamaModels=new JComboBox<>();
-        gbc.gridx=1;
-        //gbc.fill = GridBagConstraints.BOTH;
-        AIOptionsPanel.add(cmb_OllamaModels,gbc);
+            gbc.gridx = 1;
+            //gbc.weightx=2;
+            //gbc.fill = GridBagConstraints.BOTH;
+            BurpAIOptionsPanel.add(temperatureSlider, gbc);
 
+            temperatureValueLabel = new JLabel(String.format("%.2f", LLMTemperature));
+            temperatureValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            gbc.gridx = 2;
+            gbc.anchor = GridBagConstraints.EAST;
+            BurpAIOptionsPanel.add(temperatureValueLabel, gbc);
+
+            // 3. Add a ChangeListener to the JSlider
+            temperatureSlider.addChangeListener(new ChangeListener() {
+                @Override
+                public void stateChanged(ChangeEvent e) {
+                    // Get the current integer value from the slider
+                    int sliderValue = temperatureSlider.getValue();
+                    LLMTemperature = (float) sliderValue / SLIDER_SCALE;
+                    temperatureValueLabel.setText(String.format("%.2f", LLMTemperature));
+
+                    // You can add logic here to use the 'currentTemperature'
+                    // For example, if you had an LLM API client, you'd update its temperature setting
+                    // System.out.println("New Temperature: " + currentTemperature);
+                }
+            });
+
+            disableComponents(BurpAIOptionsPanel);
+        }
+        else
+        {
+            //AI Options
+            AIOptionsPanel = new JPanel(new GridBagLayout());
+            AIOptionsPanel.setBorder(BorderFactory.createTitledBorder("Ollama options"));
+            gbc = new GridBagConstraints();
+            //gbc.fill = GridBagConstraints.BOTH;
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.gridy = 1;
+            gbc.gridx = 0;
+            //gbc.gridwidth=2;
+            this.add(AIOptionsPanel, gbc);
+
+
+            JLabel lblOllama = new JLabel("Ollama Endpoint");
+            gbc = new GridBagConstraints();
+            gbc.fill = GridBagConstraints.NONE;
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.gridy = 0;
+            gbc.gridx = 0;
+            gbc.weightx = 0.2f;
+            AIOptionsPanel.add(lblOllama, gbc);
+
+            txtOllamaEndpoint = new JTextField(15);
+            txtOllamaEndpoint.setText("http://127.0.0.1:11434");
+            gbc.gridx = 1;
+            gbc.weightx = 0.7f;
+            AIOptionsPanel.add(txtOllamaEndpoint, gbc);
+
+            gbc.gridx = 2;
+            gbc.weightx = 0.1f;
+            JButton btnOllamaConnect = new JButton("Connect");
+            btnOllamaConnect.addActionListener(e -> {
+                String error_msg = validate_AIConnect();
+                if (error_msg.isEmpty())
+                    ollamaConnectInBackground();
+                else {
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(null, error_msg, "Validation Error", JOptionPane.WARNING_MESSAGE);
+                    });
+                }
+
+            });
+            AIOptionsPanel.add(btnOllamaConnect, gbc);
+
+
+            //2nd row
+            JLabel lblOllamaModels = new JLabel("Ollama Models");
+            //gbc = new GridBagConstraints();
+            //gbc.fill = GridBagConstraints.BOTH;
+            gbc = new GridBagConstraints();
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.gridy = 1;
+            gbc.gridx = 0;
+            AIOptionsPanel.add(lblOllamaModels, gbc);
+
+            cmb_OllamaModels = new JComboBox<>();
+            gbc.gridx = 1;
+            //gbc.fill = GridBagConstraints.BOTH;
+            AIOptionsPanel.add(cmb_OllamaModels, gbc);
+
+
+
+
+
+            //temperature Slider
+            temperatureLabel = new JLabel("Temperature");
+            temperatureLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            //temperatureValueLabel.setFont(new Font("Arial", Font.BOLD, 16));
+
+            this.LLMTemperature = (float) SLIDER_INITIAL / SLIDER_SCALE;
+            temperatureSlider = new JSlider(JSlider.HORIZONTAL, SLIDER_MIN, SLIDER_MAX, SLIDER_INITIAL);
+            temperatureSlider.setMajorTickSpacing(50);
+            temperatureSlider.setMinorTickSpacing(10);
+            temperatureSlider.setPaintTicks(true);
+            temperatureSlider.setPaintLabels(true);
+
+
+            gbc = new GridBagConstraints();
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.gridy = 2;
+            gbc.gridx = 0;
+            AIOptionsPanel.add(temperatureLabel, gbc);
+
+            gbc.gridx = 1;
+            //gbc.weightx=2;
+            //gbc.fill = GridBagConstraints.BOTH;
+            AIOptionsPanel.add(temperatureSlider, gbc);
+
+            temperatureValueLabel = new JLabel(String.format("%.2f", LLMTemperature));
+            temperatureValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            gbc.gridx = 2;
+            gbc.anchor = GridBagConstraints.EAST;
+            AIOptionsPanel.add(temperatureValueLabel, gbc);
+
+            // 3. Add a ChangeListener to the JSlider
+            temperatureSlider.addChangeListener(new ChangeListener() {
+                @Override
+                public void stateChanged(ChangeEvent e) {
+                    // Get the current integer value from the slider
+                    int sliderValue = temperatureSlider.getValue();
+                    LLMTemperature = (float) sliderValue / SLIDER_SCALE;
+                    temperatureValueLabel.setText(String.format("%.2f", LLMTemperature));
+
+                    // You can add logic here to use the 'currentTemperature'
+                    // For example, if you had an LLM API client, you'd update its temperature setting
+                    // System.out.println("New Temperature: " + currentTemperature);
+                }
+            });
+
+
+            disableComponents(AIOptionsPanel);
+        }
 
 
         // --- ADD ACTION LISTENERS TO RADIO BUTTONS ---
         radioExecSumMode_userSupplied.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                disableComponents(AIOptionsPanel);
+                if(Config.useOnlyBurpAI)
+                    disableComponents(BurpAIOptionsPanel);
+                else
+                    disableComponents(AIOptionsPanel);
             }
         });
 
         radioExecSumMode_AIgenerated.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                enableComponents(AIOptionsPanel);
+                if(Config.useOnlyBurpAI)
+                    enableComponents(BurpAIOptionsPanel);
+                else
+                    enableComponents(AIOptionsPanel);
             }
         });
         // ---------------------------------------------
-
-
-        //temperature Slider
-        temperatureLabel = new JLabel("Temperature");
-        temperatureLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        //temperatureValueLabel.setFont(new Font("Arial", Font.BOLD, 16));
-
-        this.LLMTemperature = (float) SLIDER_INITIAL / SLIDER_SCALE;
-        temperatureSlider = new JSlider(JSlider.HORIZONTAL, SLIDER_MIN, SLIDER_MAX, SLIDER_INITIAL);
-        temperatureSlider.setMajorTickSpacing(50);
-        temperatureSlider.setMinorTickSpacing(10);
-        temperatureSlider.setPaintTicks(true);
-        temperatureSlider.setPaintLabels(true);
-
-
-
-        gbc = new GridBagConstraints();
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.gridy = 2;
-        gbc.gridx=0;
-        AIOptionsPanel.add(temperatureLabel,gbc);
-
-        gbc.gridx=1;
-        //gbc.weightx=2;
-        //gbc.fill = GridBagConstraints.BOTH;
-        AIOptionsPanel.add(temperatureSlider,gbc);
-
-        temperatureValueLabel = new JLabel(String.format("%.2f", LLMTemperature));
-        temperatureValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        gbc.gridx=2;
-        gbc.anchor=GridBagConstraints.EAST;
-        AIOptionsPanel.add(temperatureValueLabel,gbc);
-
-        // 3. Add a ChangeListener to the JSlider
-        temperatureSlider.addChangeListener(new ChangeListener() {
-            @Override
-            public void stateChanged(ChangeEvent e) {
-                // Get the current integer value from the slider
-                int sliderValue = temperatureSlider.getValue();
-                LLMTemperature = (float) sliderValue / SLIDER_SCALE;
-                temperatureValueLabel.setText(String.format("%.2f", LLMTemperature));
-
-                // You can add logic here to use the 'currentTemperature'
-                // For example, if you had an LLM API client, you'd update its temperature setting
-                // System.out.println("New Temperature: " + currentTemperature);
-            }
-        });
-
-
-        disableComponents(AIOptionsPanel);
 
     }
 
@@ -409,6 +540,7 @@ Your core characteristics are:
     {
         UserAddedMoreIssues=true;
         LLMPrompt=GenerateInitialPrompt(ExecSummaryPanel.this.exportController.issuesModel.getFindings());
+        userMessage=GenerateInitialUserPrompt(ExecSummaryPanel.this.exportController.issuesModel.getFindings());
     }
 
 
@@ -458,6 +590,35 @@ Your core characteristics are:
                 i++;
             }
             promptBuilder.append("\n\nOverall Security Posture: "+Finding.getProjectOverallSecurityPosture(findings)+"\n---");
+        }
+        else
+        {
+            promptBuilder.append(Constants.initial_LLMPrompt);
+        }
+
+        return promptBuilder.toString();
+    }
+
+
+    private String GenerateInitialUserPrompt(List<Finding> findings)
+    {
+        StringBuilder promptBuilder=new StringBuilder();
+        int i=1;
+        //promptBuilder.append("Scope: "+Finding.getProjectScope(findings));
+        promptBuilder.append("During the recent penetration testing the following Security findings have been found:");
+        if(findings.size()>0) {
+            for (Finding f : findings) {
+                promptBuilder.append("\n"+i + ". Finding name: " +f.issueName+". Severity: "+f.severity);
+                //promptBuilder.append("\n"+i + ". "+f.issueName+".");
+                //promptBuilder.append("\n    Severity: "+ f.severity);
+                //promptBuilder.append("\n    Description: " +Utilities.extractText(f.getIssueDetailsSummaryHTML())+". "+Utilities.extractText(f.issueDescrBackground));
+                promptBuilder.append("\n    " +Utilities.extractText(f.issueDescrBackground)+Utilities.extractText(f.getIssueDetailsSummaryHTML()));
+                //promptBuilder.append("\n    Impact: "+ Utilities.extractText(f.issueDescrBackground));
+                //promptBuilder.append("\n    Remediation: "+Utilities.extractText(f.issueRemediation));
+                i++;
+            }
+            promptBuilder.append("\n\nOverall Security Posture: "+Finding.getProjectOverallSecurityPosture(findings)+"\n---");
+            promptBuilder.append("\n\nNow make an executive summary of two paragraphs maximum, presenting in the first paragraph the security findings and in the second paragraph summarize the necessary actions that remediate the findings.");
         }
         else
         {
@@ -589,6 +750,28 @@ Your core characteristics are:
     }
 
 
+
+
+    public String BurpAIQueryLLMBlocking(String systemMessage,String userMessage,double temperature)
+    {
+        try
+        {
+            Events.publish(new Events.UpdateDebugEvent(Constants.export_AIGeneratingSummary+"\n"));
+            // Send the prompt and get the response
+            PromptOptions burpai_options=PromptOptions.promptOptions().withTemperature(temperature);
+            PromptResponse response=this.montoyapi.ai().prompt().execute(burpai_options,systemMessage,userMessage);
+
+            // Retrieve the AI's response content
+            String aiOutput = response.content();
+            return aiOutput;
+        }
+        catch (Exception ex) {
+            this.montoyapi.logging().logToError("Error calling LLM: "+ Utilities.getStackTraceAsString(ex));
+            Events.publish(new Events.UpdateDebugEvent(Constants.export_AI_Error+"\n"));
+            return ExecutiveSummary_userSupplied;
+        }
+    }
+
     public String ollamaQueryLLMBlocking(String model, String prompt) {
         Events.publish(new Events.UpdateDebugEvent(Constants.export_AIGeneratingSummary+"\n"));
         String escapedPrompt = prompt.replace("'", "\\'").replace("<p>", "").replace("</p>", "");
@@ -696,21 +879,29 @@ Your core characteristics are:
         String error_msg="";
         if (radioExecSumMode_AIgenerated.isSelected())
         {
-            //validate if Ollama URL Is valid URL
-            try {
-                boolean isvalidURL=Utilities.isValidURL(txtOllamaEndpoint.getText().trim());
-                if (!isvalidURL)
-                    error_msg=Constants.msgNotValidUrl;
-            } catch (MalformedURLException ex) {
-                error_msg=Constants.msgNotValidUrl; // String is not a well-formed URL
-            }
-            if (txtOllamaEndpoint.getText().isBlank())
+            if(useOnlyBurpAI)
             {
-                error_msg=Constants.AIOptions_ollamaEndpointEmpty;
+                if (!this.montoyapi.ai().isEnabled()) {
+
+                    this.montoyapi.logging().logToOutput(Constants.BurpAI_notEnabledInBurp);
+                    error_msg=Constants.BurpAI_notEnabledInBurp;
+                }
             }
-            if (cmb_OllamaModels.getSelectedItem()==null)
-            {
-                error_msg=Constants.AIOptions_ollamaModelNotSelected;
+            else {
+                //validate if Ollama URL Is valid URL
+                try {
+                    boolean isvalidURL = Utilities.isValidURL(txtOllamaEndpoint.getText().trim());
+                    if (!isvalidURL)
+                        error_msg = Constants.msgNotValidUrl;
+                } catch (MalformedURLException ex) {
+                    error_msg = Constants.msgNotValidUrl; // String is not a well-formed URL
+                }
+                if (txtOllamaEndpoint.getText().isBlank()) {
+                    error_msg = Constants.AIOptions_ollamaEndpointEmpty;
+                }
+                if (cmb_OllamaModels.getSelectedItem() == null) {
+                    error_msg = Constants.AIOptions_ollamaModelNotSelected;
+                }
             }
         }
         return error_msg;
@@ -724,21 +915,90 @@ Your core characteristics are:
         private JButton loadInitialButton; // The new button
         private String savedText; // To store the text when saved
         private String initialText; // Store the original initial text
+        private String savedSystemMsg;
+        private String savedUserMsg;
         private boolean cancelled = true; // To know if the dialog was cancelled
+        private boolean useBurpAI;
+        private JTextField systemMsgTextBox;
+        private JTextArea userMsgTextArea;
 
-        public EditTextDialog(Frame owner, String initialText,String defaultPrompt, String title) {
+
+        public EditTextDialog(Frame owner,boolean useBurpAI, String initialText,String defaultPrompt,String systemMessage,String userMessage,String defaultsystemMsg,String defaultuserMsg, String title) {
             super(owner, title, true); // true makes it modal (blocks parent until closed)
+            this.useBurpAI=useBurpAI;
             setDefaultCloseOperation(DISPOSE_ON_CLOSE); // Close on X button
+            setLayout(new BorderLayout(10, 10));
 
-            this.initialText = initialText; // Store the initial text
+            if(useBurpAI)
+            {
+                //this.setLayout(new GridBagLayout());
 
-            textArea = new JTextArea(20, 60); // 20 rows, 60 columns
-            textArea.setLineWrap(true);
-            textArea.setWrapStyleWord(true);
-            textArea.setText(initialText); // Set initial text
+                JPanel burpAIpnl=new JPanel(new GridBagLayout());
+                // Create GridBagConstraints for layout management
+                GridBagConstraints gbc = new GridBagConstraints();
+                // Reset constraints to default for each new component or row
+                gbc.fill = GridBagConstraints.HORIZONTAL; // Components will fill their display area horizontally
+                gbc.insets = new Insets(5, 5, 5, 5); // Padding around components (top, left, bottom, right)
 
-            JScrollPane scrollPane = new JScrollPane(textArea);
-            scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+                // --- First Row: System Message Label and Textbox ---
+
+                // 1. System Message Label
+                JLabel systemLabel = new JLabel("System Message:");
+                gbc.gridx = 0; // Column 0
+                gbc.gridy = 0; // Row 0
+                gbc.anchor = GridBagConstraints.WEST; // Align label to the west (left)
+                burpAIpnl.add(systemLabel, gbc);
+
+                // 2. Textbox for System Message
+                systemMsgTextBox = new JTextField(30); // 30 columns wide
+                systemMsgTextBox.setText(systemMessage);
+                gbc.gridx = 1; // Column 1
+                gbc.gridy = 0; // Row 0
+                gbc.weightx = 1.0; // Allow this component to take extra horizontal space
+                gbc.anchor = GridBagConstraints.EAST; // Align textbox to the east (right)
+                burpAIpnl.add(systemMsgTextBox, gbc);
+
+                // --- Second Row: User Message Label and Text Area in JScrollPane ---
+
+                // 1. User Message Label
+                JLabel userLabel = new JLabel("User Message:");
+                gbc.gridx = 0; // Column 0
+                gbc.gridy = 1; // Row 1
+                gbc.weightx = 0.0; // Reset weightx for the label
+                gbc.anchor = GridBagConstraints.NORTHWEST; // Align label to the top-left (for multiline text area)
+                burpAIpnl.add(userLabel, gbc);
+
+                // 2. Text Area for User Message
+                userMsgTextArea = new JTextArea(20, 60);
+                userMsgTextArea.setLineWrap(true); // Enable word wrapping
+                userMsgTextArea.setWrapStyleWord(true); // Wrap at word boundaries
+                userMsgTextArea.setText(userMessage);
+
+                // Put the JTextArea inside a JScrollPane for scrollability
+                JScrollPane scrollPane = new JScrollPane(userMsgTextArea);
+
+                gbc.gridx = 1; // Column 1
+                gbc.gridy = 1; // Row 1
+                gbc.weightx = 1.0; // Allow text area to take extra horizontal space
+                gbc.weighty = 1.0; // Allow text area to take extra vertical space
+                gbc.fill = GridBagConstraints.BOTH; // Text area will fill its display area both horizontally and vertically
+                burpAIpnl.add(scrollPane, gbc);
+                //setLayout(new BorderLayout(10, 10));
+                add(burpAIpnl, BorderLayout.CENTER);
+            }
+            else
+            {
+                this.initialText = initialText; // Store the initial text
+                textArea = new JTextArea(20, 60); // 20 rows, 60 columns
+                textArea.setLineWrap(true);
+                textArea.setWrapStyleWord(true);
+                textArea.setText(initialText); // Set initial text
+
+                JScrollPane scrollPane = new JScrollPane(textArea);
+                scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+                //setLayout(new BorderLayout(10, 10));
+                add(scrollPane, BorderLayout.CENTER);
+            }
 
             saveButton = new JButton("Save");
             cancelButton = new JButton("Cancel");
@@ -750,13 +1010,20 @@ Your core characteristics are:
             buttonPanel.add(loadInitialButton);
             buttonPanel.add(cancelButton);
 
-            setLayout(new BorderLayout(10, 10)); // Padding between components
-            add(scrollPane, BorderLayout.CENTER);
+            //setLayout(new BorderLayout(10, 10)); // Padding between components
             add(buttonPanel, BorderLayout.SOUTH);
 
             // Add action listeners
             saveButton.addActionListener(e -> {
-                savedText = textArea.getText();
+                if(useBurpAI)
+                {
+                    savedSystemMsg = systemMsgTextBox.getText();
+                    savedUserMsg=userMsgTextArea.getText();
+                }
+                else
+                {
+                    savedText = textArea.getText();
+                }
                 cancelled = false;
                 dispose(); // Close the dialog
             });
@@ -768,9 +1035,15 @@ Your core characteristics are:
 
             // Action listener for the new "Load Initial" button
             loadInitialButton.addActionListener(e -> {
-                textArea.setText(defaultPrompt); // Set the text area back to the stored initial text
-                // You might want to provide some user feedback, e.g., a small sound or a temporary message.
-                // JOptionPane.showMessageDialog(this, "Text reverted to initial content.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                if(useBurpAI)
+                {
+                    systemMsgTextBox.setText(defaultsystemMsg);
+                    userMsgTextArea.setText(defaultuserMsg);
+                }
+                else
+                {
+                    textArea.setText(defaultPrompt); // Set the text area back to the stored initial text
+                }
             });
 
             pack(); // Pack components to their preferred size
@@ -781,9 +1054,20 @@ Your core characteristics are:
          * Shows the dialog and returns the saved text.
          * Returns null if the dialog was cancelled.
          */
-        public String showDialog() {
+        public String[] showDialog()
+        {
             setVisible(true); // Make the dialog visible (blocks until dispose() is called)
-            return cancelled ? null : savedText;
+            String[] messages= new String[2];
+            if(useBurpAI)
+            {
+                messages[0]=savedSystemMsg;
+                messages[1]=savedUserMsg;
+            }
+            else
+            {
+                messages[0]=savedText;
+            }
+            return cancelled ? null : messages;
         }
 
         /**
