@@ -45,8 +45,6 @@ public class Constants {
 
     public static final String initial_LLMPrompt="No issues have been found! The application has a very good security posture.";
     public static final String initial_LLMPromptMD="No issues have been found!";
-    public static final String AIOptions_ollamaEndpointEmpty="Please provide a valid Ollama API URL!";
-    public static final String AIOptions_ollamaModelNotSelected="Please click 'Connect' and select a model!";
     public static final String BurpAI_notEnabledInBurp="AI is not enabled. Enable it in Burp.";
     public static final String BurpI_defaultsystemMessage="You are a web security assistant specialized in summarizing security findings and proposing remediation actions.";
 

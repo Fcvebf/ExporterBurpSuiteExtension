@@ -24,8 +24,6 @@ dependencies {
     implementation("fr.opensagres.xdocreport:fr.opensagres.xdocreport.template.velocity:2.1.0")
     implementation("org.apache.velocity:velocity-engine-core:2.4.1")
     implementation("org.slf4j:slf4j-simple:2.0.17")
-    implementation("dev.langchain4j:langchain4j:1.0.1")
-    implementation("dev.langchain4j:langchain4j-ollama:1.0.1-beta6")
     implementation("commons-validator:commons-validator:1.9.0")
 
 }

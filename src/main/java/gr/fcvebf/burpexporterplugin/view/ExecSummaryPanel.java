@@ -17,8 +17,6 @@ import burp.api.montoya.scanner.audit.issues.AuditIssue;
 import gr.fcvebf.burpexporterplugin.controllers.ExporterController;
 import gr.fcvebf.burpexporterplugin.models.ExportModel;
 import gr.fcvebf.burpexporterplugin.models.Finding;
-import gr.fcvebf.burpexporterplugin.models.ollama.OllamaClient;
-import gr.fcvebf.burpexporterplugin.models.ollama.OllamaModel;
 import gr.fcvebf.burpexporterplugin.models.pwndoc.AuditType;
 import gr.fcvebf.burpexporterplugin.utils.Config;
 import gr.fcvebf.burpexporterplugin.utils.Constants;
@@ -49,10 +47,8 @@ public class ExecSummaryPanel extends JPanel {
     JRadioButton radioExecSumMode_AIgenerated;
     JPanel AIOptionsPanel;
     JPanel BurpAIOptionsPanel;
-    public JTextField txtOllamaEndpoint;
     public MontoyaApi montoyapi;
     public Boolean debug;
-    public JComboBox<OllamaModel> cmb_OllamaModels;
     private String ExecutiveSummaryText = "";
     private String ExecutiveSummary_userSupplied="Executive summary text goes here";
     public String ExecutiveSummary_AIgenerated="";
@@ -69,7 +65,6 @@ public class ExecSummaryPanel extends JPanel {
     public String userMessage="";
 
 
-    private OllamaClient ollama_client;
     public boolean useMarkdown;
     public boolean useOnlyBurpAI;
     private float LLMTemperature;
@@ -107,15 +102,7 @@ Your core characteristics are:
             }
             else
             {
-
-                /*
-                ollamaQueryLLM(this.cmb_OllamaModels.getSelectedItem().toString(), LLMPrompt);
-                return  this.ExecutiveSummary_AIgenerated;
-                 */
-                String model = cmb_OllamaModels.getSelectedItem().toString();
-                String result = ollamaQueryLLMBlocking(model, LLMPrompt);
-                this.ExecutiveSummary_AIgenerated = result;
-                return result;
+                return execsum;
             }
         }
 
@@ -139,14 +126,8 @@ Your core characteristics are:
             }
             else
             {
-                /*
-                ollamaQueryLLM(this.cmb_OllamaModels.getSelectedItem().toString(), LLMPrompt);
-                return  this.ExecutiveSummary_AIgenerated;
-                 */
-                String model = cmb_OllamaModels.getSelectedItem().toString();
-                String result = ollamaQueryLLMBlocking(model, LLMPrompt);
-                this.ExecutiveSummary_AIgenerated = result;
-                return result;
+
+                return execsum;
             }
         }
 
@@ -398,117 +379,9 @@ Your core characteristics are:
         }
         else
         {
-            //AI Options
-            AIOptionsPanel = new JPanel(new GridBagLayout());
-            AIOptionsPanel.setBorder(BorderFactory.createTitledBorder("Ollama options"));
-            gbc = new GridBagConstraints();
-            //gbc.fill = GridBagConstraints.BOTH;
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.gridy = 1;
-            gbc.gridx = 0;
-            //gbc.gridwidth=2;
-            this.add(AIOptionsPanel, gbc);
 
-
-            JLabel lblOllama = new JLabel("Ollama Endpoint");
-            gbc = new GridBagConstraints();
-            gbc.fill = GridBagConstraints.NONE;
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.gridy = 0;
-            gbc.gridx = 0;
-            gbc.weightx = 0.2f;
-            AIOptionsPanel.add(lblOllama, gbc);
-
-            txtOllamaEndpoint = new JTextField(15);
-            txtOllamaEndpoint.setText("http://127.0.0.1:11434");
-            gbc.gridx = 1;
-            gbc.weightx = 0.7f;
-            AIOptionsPanel.add(txtOllamaEndpoint, gbc);
-
-            gbc.gridx = 2;
-            gbc.weightx = 0.1f;
-            JButton btnOllamaConnect = new JButton("Connect");
-            btnOllamaConnect.addActionListener(e -> {
-                String error_msg = validate_AIConnect();
-                if (error_msg.isEmpty())
-                    ollamaConnectInBackground();
-                else {
-                    SwingUtilities.invokeLater(() -> {
-                        JOptionPane.showMessageDialog(null, error_msg, "Validation Error", JOptionPane.WARNING_MESSAGE);
-                    });
-                }
-
-            });
-            AIOptionsPanel.add(btnOllamaConnect, gbc);
-
-
-            //2nd row
-            JLabel lblOllamaModels = new JLabel("Ollama Models");
-            //gbc = new GridBagConstraints();
-            //gbc.fill = GridBagConstraints.BOTH;
-            gbc = new GridBagConstraints();
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.gridy = 1;
-            gbc.gridx = 0;
-            AIOptionsPanel.add(lblOllamaModels, gbc);
-
-            cmb_OllamaModels = new JComboBox<>();
-            gbc.gridx = 1;
-            //gbc.fill = GridBagConstraints.BOTH;
-            AIOptionsPanel.add(cmb_OllamaModels, gbc);
-
-
-
-
-
-            //temperature Slider
-            temperatureLabel = new JLabel("Temperature");
-            temperatureLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            //temperatureValueLabel.setFont(new Font("Arial", Font.BOLD, 16));
-
-            this.LLMTemperature = (float) SLIDER_INITIAL / SLIDER_SCALE;
-            temperatureSlider = new JSlider(JSlider.HORIZONTAL, SLIDER_MIN, SLIDER_MAX, SLIDER_INITIAL);
-            temperatureSlider.setMajorTickSpacing(50);
-            temperatureSlider.setMinorTickSpacing(10);
-            temperatureSlider.setPaintTicks(true);
-            temperatureSlider.setPaintLabels(true);
-
-
-            gbc = new GridBagConstraints();
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.gridy = 2;
-            gbc.gridx = 0;
-            AIOptionsPanel.add(temperatureLabel, gbc);
-
-            gbc.gridx = 1;
-            //gbc.weightx=2;
-            //gbc.fill = GridBagConstraints.BOTH;
-            AIOptionsPanel.add(temperatureSlider, gbc);
-
-            temperatureValueLabel = new JLabel(String.format("%.2f", LLMTemperature));
-            temperatureValueLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            gbc.gridx = 2;
-            gbc.anchor = GridBagConstraints.EAST;
-            AIOptionsPanel.add(temperatureValueLabel, gbc);
-
-            // 3. Add a ChangeListener to the JSlider
-            temperatureSlider.addChangeListener(new ChangeListener() {
-                @Override
-                public void stateChanged(ChangeEvent e) {
-                    // Get the current integer value from the slider
-                    int sliderValue = temperatureSlider.getValue();
-                    LLMTemperature = (float) sliderValue / SLIDER_SCALE;
-                    temperatureValueLabel.setText(String.format("%.2f", LLMTemperature));
-
-                    // You can add logic here to use the 'currentTemperature'
-                    // For example, if you had an LLM API client, you'd update its temperature setting
-                    // System.out.println("New Temperature: " + currentTemperature);
-                }
-            });
-
-
-            disableComponents(AIOptionsPanel);
         }
+
 
 
         // --- ADD ACTION LISTENERS TO RADIO BUTTONS ---
@@ -664,91 +537,6 @@ Your core characteristics are:
     }
 
 
-    private void ollamaConnectInBackground()
-    {
-        new SwingWorker<Boolean, Void>()
-        {
-            private List<OllamaModel> lst_models=null;
-
-            @Override
-            protected Boolean doInBackground() throws Exception
-            {
-                try
-                {
-                    ollama_client=new OllamaClient(txtOllamaEndpoint.getText().trim(),ExecSummaryPanel.this.montoyapi,ExecSummaryPanel.this.debug);
-
-                    lst_models=ollama_client.GetOllamaModels();
-                    if(lst_models == null)
-                    {
-                        SwingUtilities.invokeLater(() -> {
-                            JOptionPane.showMessageDialog(null, "Unable to connect to Ollama","Connection Error", JOptionPane.WARNING_MESSAGE);
-                        });
-                        return false;
-                    }
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    throw new RuntimeException(ex);
-                }
-            }
-
-            @Override
-            protected void done()
-            {
-                try {
-                    boolean result = get();
-                    cmb_OllamaModels.removeAllItems();
-                    if (result)
-                    {
-                        for (OllamaModel model:lst_models) {
-                            cmb_OllamaModels.addItem(new OllamaModel(model.name,model.model));
-                        }
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }.execute();
-    }
-
-
-    private void ollamaQueryLLM(String model,String prompt)
-    {
-        String escapedPrompt=prompt.replace("'", "\\'").replace("<p>", "").replace("</p>", "");
-        this.montoyapi.logging().logToOutput(escapedPrompt);
-        new SwingWorker<String, Void>()
-        {
-            @Override
-            protected String doInBackground() throws Exception
-            {
-                try
-                {
-                    String answer="";
-                     //answer=ollama_client.QueryLLM(model,escapedPrompt);
-                    return ollama_client.QueryLLMLangchain(model,prompt,(double)LLMTemperature);
-                    //return answer;
-                }
-                catch (Exception ex)
-                {
-                    throw new RuntimeException(ex);
-                }
-            }
-
-            @Override
-            protected void done()
-            {
-                try {
-                    String result = get();
-                    ExecSummaryPanel.this.ExecutiveSummary_AIgenerated=result;
-
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }.execute();
-    }
-
 
 
 
@@ -772,20 +560,7 @@ Your core characteristics are:
         }
     }
 
-    public String ollamaQueryLLMBlocking(String model, String prompt) {
-        Events.publish(new Events.UpdateDebugEvent(Constants.export_AIGeneratingSummary+"\n"));
-        String escapedPrompt = prompt.replace("'", "\\'").replace("<p>", "").replace("</p>", "");
 
-        try {
-            if (ollama_client != null) {
-                return sanitizeLLMOutput(ollama_client.QueryLLMLangchain(model, prompt,(double)LLMTemperature));
-            }
-        } catch (Exception ex) {
-            this.montoyapi.logging().logToError("Error calling LLM: "+ Utilities.getStackTraceAsString(ex));
-            return ExecutiveSummary_userSupplied;
-        }
-        return "";
-    }
 
 
     public static String sanitizeLLMOutput(String input) {
@@ -856,22 +631,7 @@ Your core characteristics are:
     }
 
 
-    public String validate_AIConnect()
-    {
-        String error_msg="";
-        if (radioExecSumMode_AIgenerated.isSelected())
-        {
-            //validate if Ollama URL Is valid URL
-            try {
-                boolean isvalidURL=Utilities.isValidURL(txtOllamaEndpoint.getText().trim());
-                if (!isvalidURL)
-                    error_msg=Constants.msgNotValidUrl;
-            } catch (MalformedURLException ex) {
-                error_msg=Constants.msgNotValidUrl; // String is not a well-formed URL
-            }
-        }
-        return error_msg;
-    }
+
 
 
     public String validate_AIOptions()
@@ -887,22 +647,7 @@ Your core characteristics are:
                     error_msg=Constants.BurpAI_notEnabledInBurp;
                 }
             }
-            else {
-                //validate if Ollama URL Is valid URL
-                try {
-                    boolean isvalidURL = Utilities.isValidURL(txtOllamaEndpoint.getText().trim());
-                    if (!isvalidURL)
-                        error_msg = Constants.msgNotValidUrl;
-                } catch (MalformedURLException ex) {
-                    error_msg = Constants.msgNotValidUrl; // String is not a well-formed URL
-                }
-                if (txtOllamaEndpoint.getText().isBlank()) {
-                    error_msg = Constants.AIOptions_ollamaEndpointEmpty;
-                }
-                if (cmb_OllamaModels.getSelectedItem() == null) {
-                    error_msg = Constants.AIOptions_ollamaModelNotSelected;
-                }
-            }
+
         }
         return error_msg;
     }
