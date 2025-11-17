@@ -2,7 +2,6 @@ package gr.fcvebf.burpexporterplugin.models.pwndoc;
 
 import burp.api.montoya.MontoyaApi;
 import gr.fcvebf.burpexporterplugin.utils.HttpWrapper;
-import static gr.fcvebf.burpexporterplugin.utils.HttpWrapper.performRequest;
 import static gr.fcvebf.burpexporterplugin.utils.HttpWrapper.performRequestWithMontoya;
 
 import java.net.http.HttpResponse;
@@ -29,16 +28,7 @@ public class Pwndoc {
 
         if(!papi.useMontoya)
         {
-            HttpResponse response = performRequest(pwndocURL, jsonPayload, HttpWrapper.HttpMethod.POST, null, papi.proxyConfig, papi.debug);
-            List<String> setCookieHeaders = response.headers().allValues("Set-Cookie");
-
-            for (String cookieHeader : setCookieHeaders) {
-                if (cookieHeader.startsWith("token=")) {
-                    String tokenWithValueAndAttributes = cookieHeader.substring("token=".length());
-                    tokenValue = tokenWithValueAndAttributes.split(";")[0];
-                    break; // Found the token, no need to check further
-                }
-            }
+            this.token_cookie="";
         }
         else {
             burp.api.montoya.http.message.responses.HttpResponse response = performRequestWithMontoya(papi.montoyaApi, pwndocURL, jsonPayload, "POST", null, papi.debug);
